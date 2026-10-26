@@ -1,0 +1,689 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect AI — Roblox Studio Assistant</title>
+<style>
+:root {
+  --bg: #09090d;
+  --panel: #111116;
+  --panel2: #18181f;
+  --border: #292932;
+  --red: #ff304f;
+  --red2: #c91435;
+  --text: #f4f4f7;
+  --muted: #92929f;
+  --green: #48d597;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px Inter, system-ui, Arial, sans-serif;
+}
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+.app {
+  display: grid;
+  grid-template-columns: 235px minmax(0,1fr);
+  height: 100vh;
+}
+.sidebar {
+  background: #0d0d12;
+  border-right: 1px solid var(--border);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px;
+  font-size: 18px;
+  font-weight: 800;
+}
+.logo {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  border-radius: 11px;
+  background: linear-gradient(135deg,var(--red),#8b102b);
+  box-shadow: 0 0 24px #ff304f30;
+}
+.brand small { display:block; color:var(--muted); font-size:10px; margin-top:3px; }
+.new-chat, .side-button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 11px;
+  text-align: left;
+}
+.new-chat { border-color:#6b2635; background:#281018; }
+.section-label {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 6px 5px;
+}
+.side-button { border-color:transparent; background:transparent; }
+.side-button:hover, .side-button.active { background:var(--panel2); }
+.side-bottom { margin-top:auto; display:grid; gap:8px; }
+.status { color:var(--green); font-size:11px; }
+.main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+.topbar {
+  height: 61px;
+  border-bottom:1px solid var(--border);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+  gap:10px;
+}
+.top-title { font-weight:700; }
+.pill {
+  border:1px solid var(--border);
+  border-radius:20px;
+  padding:6px 10px;
+  color:var(--muted);
+  font-size:11px;
+}
+.workspace {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 320px;
+  flex:1;
+  min-height:0;
+}
+.chat-area {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:0;
+  border-right:1px solid var(--border);
+}
+.messages {
+  flex:1;
+  overflow:auto;
+  padding:24px clamp(14px,4vw,52px);
+}
+.welcome { max-width:680px; margin:7vh auto 30px; }
+.eyebrow {
+  color:var(--red);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:2px;
+}
+h1 { font-size:clamp(28px,4vw,43px); margin:12px 0; letter-spacing:-1.5px; }
+.gradient {
+  background:linear-gradient(90deg,#fff,#ff647a);
+  -webkit-background-clip:text;
+  color:transparent;
+}
+.subtitle { color:var(--muted); line-height:1.7; max-width:560px; }
+.suggestions {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+  margin-top:25px;
+}
+.suggestion {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:12px;
+  color:var(--text);
+  text-align:left;
+  padding:14px;
+  line-height:1.5;
+}
+.suggestion:hover { border-color:var(--red); }
+.suggestion strong { display:block; margin-bottom:5px; }
+.suggestion span { color:var(--muted); font-size:12px; }
+.message { display:flex; gap:12px; margin:22px 0; line-height:1.7; }
+.avatar {
+  flex:0 0 32px;
+  height:32px;
+  border-radius:9px;
+  display:grid;
+  place-items:center;
+  background:var(--panel2);
+  border:1px solid var(--border);
+  font-size:12px;
+  font-weight:800;
+}
+.message.user .avatar { background:#32101b; border-color:#6b2635; }
+.message-body { min-width:0; flex:1; overflow-wrap:anywhere; }
+.message-name { font-size:12px; font-weight:800; margin:2px 0 8px; }
+.message-content { white-space:pre-wrap; color:#d6d6df; }
+.message-content pre, .code-preview pre {
+  background:#08080c;
+  border:1px solid var(--border);
+  border-radius:9px;
+  padding:13px;
+  overflow:auto;
+  white-space:pre;
+  font:12px/1.6 Consolas,monospace;
+}
+.composer-wrap { padding:14px clamp(12px,4vw,45px) 18px; }
+.composer {
+  max-width:850px;
+  margin:auto;
+  border:1px solid #38313a;
+  background:#141319;
+  border-radius:15px;
+  padding:10px;
+}
+.composer textarea {
+  width:100%;
+  resize:vertical;
+  min-height:65px;
+  max-height:180px;
+  border:0;
+  outline:0;
+  background:transparent;
+  color:var(--text);
+  padding:8px;
+}
+.composer-bottom { display:flex; align-items:center; gap:8px; }
+.composer-hint { color:var(--muted); font-size:10px; margin-right:auto; }
+.primary {
+  background:var(--red);
+  border:0;
+  border-radius:8px;
+  color:white;
+  padding:9px 15px;
+  font-weight:800;
+}
+.primary:hover { background:#e82343; }
+.secondary {
+  background:var(--panel2);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:8px;
+  padding:8px 10px;
+}
+.right-panel {
+  overflow:auto;
+  padding:15px;
+  background:#0d0d12;
+}
+.panel-heading {
+  font-size:12px;
+  font-weight:800;
+  margin:7px 0 12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.card {
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.muted { color:var(--muted); font-size:11px; line-height:1.6; }
+.field-label { display:block; color:var(--muted); font-size:11px; margin:12px 0 6px; }
+.field {
+  width:100%;
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px;
+  outline:none;
+  background:#09090d;
+  color:var(--text);
+}
+.field:focus, .composer:focus-within { border-color:#793044; }
+.full { width:100%; margin-top:9px; }
+.log-item {
+  border-left:2px solid #4a2631;
+  padding:2px 0 10px 10px;
+  margin-left:3px;
+  font-size:11px;
+  color:var(--muted);
+  overflow-wrap:anywhere;
+}
+.log-item b { color:#ddd; display:block; margin-bottom:3px; }
+.code-preview { max-height:260px; overflow:auto; }
+.change-row {
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  align-items:center;
+  font-size:11px;
+  margin-top:10px;
+}
+.dot {
+  display:inline-block;
+  width:7px; height:7px; border-radius:50%;
+  background:var(--green); margin-right:5px;
+}
+.notice {
+  border:1px solid #554321;
+  background:#211b10;
+  color:#e4c58a;
+  border-radius:8px;
+  padding:10px;
+  font-size:11px;
+  line-height:1.5;
+  margin-top:10px;
+}
+.hidden { display:none !important; }
+@media(max-width:900px) {
+  .app { grid-template-columns:65px minmax(0,1fr); }
+  .sidebar { padding:12px 7px; }
+  .brand { justify-content:center; padding:4px 0; }
+  .brand-text, .section-label, .side-button span,
+  .new-chat span, .side-bottom .muted { display:none; }
+  .new-chat, .side-button { text-align:center; padding:12px 3px; }
+  .workspace { grid-template-columns:minmax(0,1fr); }
+  .right-panel { display:none; }
+  .chat-area { border:0; }
+}
+@media(max-width:520px) {
+  .suggestions { grid-template-columns:1fr; }
+  .topbar { padding:0 12px; }
+  .pill { display:none; }
+  .welcome { margin-top:30px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">C</div>
+      <div class="brand-text">Connect AI<small>ROBLOX STUDIO AGENT</small></div>
+    </div>
+    <button class="new-chat" id="newChat">＋ <span>New conversation</span></button>
+    <div>
+      <div class="section-label">Workspace</div>
+      <button class="side-button active" data-view="chat">◈ <span>AI Assistant</span></button>
+      <button class="side-button" data-view="code">⌘ <span>Code preview</span></button>
+      <button class="side-button" data-view="activity">◷ <span>Activity log</span></button>
+      <button class="side-button" data-view="settings">⚙ <span>Connection settings</span></button>
+    </div>
+    <div class="side-bottom">
+      <div class="section-label">Connection</div>
+      <div class="muted" id="sidebarStatus">Not connected</div>
+      <div class="status" id="sidebarDot">● Offline</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="top-title" id="viewTitle">AI Assistant</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="pill">Luau · Roblox</span>
+        <span class="pill" id="connectionPill">Not connected</span>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <section class="chat-area" id="chatView">
+        <div class="messages" id="messages">
+          <div class="welcome" id="welcome">
+            <div class="eyebrow">YOUR ROBLOX DEVELOPMENT PARTNER</div>
+            <h1>Build better games with <span class="gradient">Connect AI.</span></h1>
+            <p class="subtitle">Describe your idea. Get help with Luau, game systems, interfaces, debugging, and Roblox Studio workflows.</p>
+            <div class="suggestions">
+              <button class="suggestion" data-prompt="Design a professional simulator game architecture with server and client scripts. Explain the hierarchy first."><strong>✦ Build a game system</strong><span>Plan scripts, remotes and folders</span></button>
+              <button class="suggestion" data-prompt="Help me debug my Roblox Lua script. Ask me for the code and error if needed."><strong>⌘ Debug my script</strong><span>Find errors and explain fixes</span></button>
+              <button class="suggestion" data-prompt="Design a professional Roblox shop GUI with a dark red theme. Provide the complete Luau implementation."><strong>▣ Create a polished UI</strong><span>Shop, menus and animations</span></button>
+              <button class="suggestion" data-prompt="Explain how to safely inspect selected Roblox Studio objects and preview property changes before applying them."><strong>◈ Inspect my project</strong><span>Context, properties and changes</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="composer-wrap">
+          <div class="composer">
+            <textarea id="prompt" placeholder="Describe what you want to build in Roblox Studio..." aria-label="Message Connect AI"></textarea>
+            <div class="composer-bottom">
+              <span class="composer-hint">Review generated code before using it.</span>
+              <button class="secondary" id="clearPrompt">Clear</button>
+              <button class="primary" id="sendButton">Send ↗</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="codeView" class="right-panel hidden" style="display:none">
+        <div class="panel-heading">Code preview</div>
+        <div class="card">
+          <div class="muted" id="codeFilename">No code generated yet</div>
+          <div class="code-preview"><pre id="codeOutput">Generated code will appear here.</pre></div>
+          <button class="secondary full" id="copyCode">Copy code</button>
+          <button class="secondary full" id="downloadCode">Download code</button>
+        </div>
+      </section>
+
+      <aside class="right-panel" id="sidePanel">
+        <div id="settingsSection">
+          <div class="panel-heading">Connection setup</div>
+          <div class="card">
+            <div class="muted">Connect to your deployed Connect AI backend. Keep your API secrets on the server.</div>
+            <label class="field-label" for="apiUrl">Backend URL</label>
+            <input class="field" id="apiUrl" placeholder="https://your-app.onrender.com">
+            <label class="field-label" for="apiToken">Connect AI token</label>
+            <input class="field" id="apiToken" type="password" placeholder="Your private connection token" autocomplete="off">
+            <button class="primary full" id="saveSettings">Save connection</button>
+            <button class="secondary full" id="testConnection">Test connection</button>
+            <div class="muted" id="settingsStatus" style="margin-top:9px">Not configured.</div>
+          </div>
+          <div class="panel-heading">Project context</div>
+          <div class="card">
+            <div class="muted">Paste selected script source, Explorer paths, or properties from Studio to give the AI context.</div>
+            <label class="field-label" for="projectName">Project name</label>
+            <input class="field" id="projectName" placeholder="My Roblox game">
+            <label class="field-label" for="projectContext">Project details / script source</label>
+            <textarea class="field" id="projectContext" rows="6" placeholder="Workspace paths, script source, object properties, error messages..."></textarea>
+            <button class="secondary full" id="clearContext">Clear context</button>
+          </div>
+          <div class="notice">The web page cannot directly control Roblox Studio by itself. Studio changes require a connected plugin or another explicitly implemented bridge.</div>
+        </div>
+
+        <div id="codeSection" class="hidden">
+          <div class="panel-heading">Generated output</div>
+          <div class="card">
+            <div class="muted">Latest generated code</div>
+            <div class="code-preview"><pre id="codeOutput2">No code yet.</pre></div>
+            <button class="secondary full" id="copyCode2">Copy code</button>
+          </div>
+        </div>
+
+        <div id="activitySection" class="hidden">
+          <div class="panel-heading">Activity log</div>
+          <div class="card" id="activityLog"><div class="muted">No activity yet.</div></div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = id => document.getElementById(id);
+  const state = {
+    history: [],
+    code: "",
+    codeName: "GeneratedScript.lua",
+    busy: false,
+    view: "chat"
+  };
+
+  // Settings are kept in this browser session, not permanently stored.
+  const settings = {
+    url: "",
+    token: ""
+  };
+
+  function addLog(title, detail) {
+    const log = $("activityLog");
+    if (log.querySelector(".muted")?.textContent === "No activity yet.") {
+      log.innerHTML = "";
+    }
+    const item = document.createElement("div");
+    item.className = "log-item";
+    const b = document.createElement("b");
+    b.textContent = title;
+    const span = document.createElement("span");
+    span.textContent = detail;
+    item.append(b, span);
+    log.prepend(item);
+  }
+
+  function setStatus(message, connected = false) {
+    $("settingsStatus").textContent = message;
+    $("sidebarStatus").textContent = connected ? "Backend reachable" : "Connection not verified";
+    $("sidebarDot").textContent = connected ? "● Online" : "● Offline";
+    $("sidebarDot").style.color = connected ? "var(--green)" : "var(--muted)";
+    $("connectionPill").textContent = connected ? "Backend reachable" : "Not connected";
+  }
+
+  function addMessage(role, text, code = "") {
+    $("welcome")?.remove();
+    const wrap = document.createElement("div");
+    wrap.className = "message " + role;
+    const avatar = document.createElement("div");
+    avatar.className = "avatar";
+    avatar.textContent = role === "user" ? "YOU" : "AI";
+    const body = document.createElement("div");
+    body.className = "message-body";
+    const name = document.createElement("div");
+    name.className = "message-name";
+    name.textContent = role === "user" ? "You" : "Connect AI";
+    const content = document.createElement("div");
+    content.className = "message-content";
+    content.textContent = text;
+    body.append(name, content);
+
+    if (code) {
+      const pre = document.createElement("pre");
+      pre.textContent = code;
+      body.append(pre);
+    }
+
+    wrap.append(avatar, body);
+    $("messages").append(wrap);
+    $("messages").scrollTop = $("messages").scrollHeight;
+  }
+
+  function setCode(code, filename) {
+    state.code = code || "";
+    state.codeName = filename || "GeneratedScript.lua";
+    $("codeFilename").textContent = state.code ? state.codeName : "No code generated yet";
+    $("codeOutput").textContent = state.code || "Generated code will appear here.";
+    $("codeOutput2").textContent = state.code || "No code yet.";
+  }
+
+  function extractCode(text) {
+    const match = text.match(/```(?:lua|luau|javascript|js|html|json)?\s*\n([\s\S]*?)```/i);
+    return match ? match[1].trim() : "";
+  }
+
+  async function sendMessage(override) {
+    if (state.busy) return;
+    const prompt = (override || $("prompt").value).trim();
+    if (!prompt) return;
+
+    if (!settings.url) {
+      addMessage("assistant", "Please configure your backend URL and connection token in Connection setup first.");
+      showView("settings");
+      return;
+    }
+
+    $("prompt").value = "";
+    addMessage("user", prompt);
+    state.history.push({ role: "user", content: prompt });
+    state.busy = true;
+    $("sendButton").disabled = true;
+    $("sendButton").textContent = "Thinking…";
+    addLog("Request sent", prompt.slice(0, 100));
+
+    const context = [
+      "Project name: " + ($("projectName").value || "Unspecified"),
+      "Project context supplied by user:\n" + $("projectContext").value
+    ].join("\n\n");
+
+    try {
+      const response = await fetch(settings.url.replace(/\/+$/, "") + "/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + settings.token
+        },
+        body: JSON.stringify({
+          message: prompt,
+          history: state.history.slice(-12, -1),
+          context
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || data.message || "HTTP " + response.status);
+      }
+
+      const answer = data.reply || data.response || data.message || data.text;
+      if (typeof answer !== "string" || !answer.trim()) {
+        throw new Error("The backend returned no text. Check the backend's expected request and response format.");
+      }
+
+      state.history.push({ role: "assistant", content: answer });
+      const code = extractCode(answer);
+      setCode(code, "GeneratedScript.lua");
+      addMessage("assistant", answer);
+      addLog("Response received", code ? "Generated code detected." : "Text response received.");
+      setStatus("Backend responded successfully.", true);
+    } catch (error) {
+      addMessage("assistant", "I couldn't complete the request.\n\n" + error.message + "\n\nCheck your backend URL, token, server logs, and API configuration.");
+      addLog("Request failed", error.message);
+      setStatus("Request failed: " + error.message, false);
+    } finally {
+      state.busy = false;
+      $("sendButton").disabled = false;
+      $("sendButton").textContent = "Send ↗";
+    }
+  }
+
+  async function testConnection() {
+    if (!settings.url) {
+      setStatus("Enter your backend URL first.", false);
+      return;
+    }
+
+    setStatus("Testing backend…", false);
+    try {
+      const response = await fetch(settings.url.replace(/\/+$/, "") + "/health", {
+        headers: settings.token ? { "Authorization": "Bearer " + settings.token } : {}
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data.ok === false) {
+        throw new Error(data.error || "Health check failed: HTTP " + response.status);
+      }
+      setStatus("Backend health check succeeded.", true);
+      addLog("Connection test", "Health endpoint responded.");
+    } catch (error) {
+      setStatus("Test failed: " + error.message, false);
+      addLog("Connection test failed", error.message);
+    }
+  }
+
+  function showView(view) {
+    state.view = view;
+    $("viewTitle").textContent = ({
+      chat: "AI Assistant",
+      code: "Code preview",
+      activity: "Activity log",
+      settings: "Connection settings"
+    })[view] || "AI Assistant";
+
+    document.querySelectorAll(".side-button").forEach(button => {
+      button.classList.toggle("active", button.dataset.view === view);
+    });
+
+    $("chatView").classList.toggle("hidden", view !== "chat");
+    $("chatView").style.display = view === "chat" ? "flex" : "none";
+    $("settingsSection").classList.toggle("hidden", view !== "settings");
+    $("codeSection").classList.toggle("hidden", view !== "code");
+    $("activitySection").classList.toggle("hidden", view !== "activity");
+    $("sidePanel").style.display = view === "chat" ? "" : "block";
+    if (view !== "chat") {
+      $("chatView").style.display = "none";
+      $("sidePanel").style.gridColumn = "1 / -1";
+    } else {
+      $("sidePanel").style.gridColumn = "";
+    }
+  }
+
+  $("saveSettings").addEventListener("click", () => {
+    const url = $("apiUrl").value.trim().replace(/\/+$/, "");
+    const token = $("apiToken").value.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      setStatus("Enter a valid http:// or https:// backend URL.", false);
+      return;
+    }
+    settings.url = url;
+    settings.token = token;
+    setStatus("Settings saved for this browser session. Test the connection.", false);
+    addLog("Settings updated", "Backend URL configured.");
+  });
+
+  $("testConnection").addEventListener("click", testConnection);
+  $("sendButton").addEventListener("click", () => sendMessage());
+  $("clearPrompt").addEventListener("click", () => { $("prompt").value = ""; });
+  $("prompt").addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
+
+  $("newChat").addEventListener("click", () => {
+    state.history = [];
+    $("messages").innerHTML = "";
+    const welcome = document.createElement("div");
+    welcome.className = "welcome";
+    welcome.id = "welcome";
+    welcome.innerHTML = '<div class="eyebrow">CONNECT AI</div><h1>What are we <span class="gradient">building?</span></h1><p class="subtitle">Describe your next Roblox Studio task.</p>';
+    $("messages").append(welcome);
+    addLog("New conversation", "Chat history cleared.");
+    showView("chat");
+  });
+
+  document.querySelectorAll("[data-prompt]").forEach(button => {
+    button.addEventListener("click", () => {
+      $("prompt").value = button.dataset.prompt;
+      $("prompt").focus();
+    });
+  });
+
+  document.querySelectorAll("[data-view]").forEach(button => {
+    button.addEventListener("click", () => showView(button.dataset.view));
+  });
+
+  function copyCode() {
+    if (!state.code) {
+      addLog("Copy unavailable", "No generated code to copy.");
+      return;
+    }
+    navigator.clipboard.writeText(state.code)
+      .then(() => addLog("Code copied", state.codeName))
+      .catch(() => addLog("Copy failed", "Select and copy the code manually."));
+  }
+
+  $("copyCode").addEventListener("click", copyCode);
+  $("copyCode2").addEventListener("click", copyCode);
+  $("downloadCode").addEventListener("click", () => {
+    if (!state.code) return;
+    const blob = new Blob([state.code], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = state.codeName;
+    link.click();
+    URL.revokeObjectURL(url);
+    addLog("Code downloaded", state.codeName);
+  });
+
+  $("clearContext").addEventListener("click", () => {
+    $("projectContext").value = "";
+    $("projectName").value = "";
+    addLog("Project context cleared", "Local context box cleared.");
+  });
+
+  setCode("", "");
+  setStatus("Enter your backend URL and token.", false);
+})();
+</script>
+</body>
+</html>
