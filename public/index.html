@@ -1,721 +1,259 @@
-
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connect AI — Roblox Studio Assistant</title>
-
+<title>Connect AI — Roblox Studio</title>
 <style>
 :root {
   color-scheme: dark;
-  --bg: #0b0b0f;
-  --panel: #131319;
-  --panel2: #191920;
-  --line: #2b2b35;
-  --red: #ff304f;
-  --text: #f4f4f7;
-  --muted: #a1a1af;
-  --green: #52d69a;
+  --bg:#101014; --panel:#19191f; --line:#303039;
+  --text:#f3f3f7; --muted:#a4a4b1; --red:#ff3655;
 }
-
-* { box-sizing: border-box; }
-
+* { box-sizing:border-box; }
 body {
-  margin: 0;
-  background: radial-gradient(ellipse at top, #251019 0%, var(--bg) 44%);
-  color: var(--text);
-  font: 15px/1.5 Inter, ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
-  min-height: 100vh;
+  margin:0; background:var(--bg); color:var(--text);
+  font:14px Inter,Segoe UI,Arial,sans-serif;
 }
-
-.app {
-  max-width: 1150px;
-  margin: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:18px 22px; border-bottom:1px solid var(--line);
+  position:sticky; top:0; background:var(--bg); z-index:5;
 }
-
-.top {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 2px 18px;
-  border-bottom: 1px solid var(--line);
+.brand { font-size:18px; font-weight:800; letter-spacing:.5px; }
+.brand span { color:var(--red); }
+.status { color:var(--muted); font-size:12px; }
+main {
+  width:min(1250px,100%); margin:auto; padding:22px;
+  display:grid; grid-template-columns:minmax(0,1fr); gap:16px;
 }
-
-.logo {
-  width: 42px;
-  height: 42px;
-  border-radius: 13px;
-  background: linear-gradient(135deg, #ff304f, #9f1435);
-  display: grid;
-  place-items: center;
-  font-weight: 900;
-  font-size: 20px;
-  box-shadow: 0 8px 30px #ff304f30;
+.panel {
+  border:1px solid var(--line); background:var(--panel);
+  border-radius:14px; overflow:hidden;
 }
-
-.brand {
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: .2px;
+.panel-title {
+  padding:14px 16px; border-bottom:1px solid var(--line);
+  font-weight:700; display:flex; justify-content:space-between; gap:10px;
 }
-
-.sub {
-  color: var(--muted);
-  font-size: 12px;
+#messages { padding:16px; min-height:190px; max-height:370px; overflow:auto; }
+.message {
+  white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6;
+  padding:12px; border-radius:10px; margin-bottom:10px;
+  background:#23232b;
 }
-
-.status {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--line);
-  background: #15151c;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--muted);
+.message.user { border-left:3px solid var(--red); }
+.message.ai { border-left:3px solid #7777ff; }
+.composer { display:flex; gap:10px; padding:14px; border-top:1px solid var(--line); }
+textarea, button { font:inherit; }
+#prompt {
+  flex:1; min-width:0; min-height:68px; resize:vertical;
+  color:var(--text); background:#111116; border:1px solid var(--line);
+  border-radius:10px; padding:12px; outline:none;
 }
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #777;
+#prompt:focus { border-color:var(--red); }
+button {
+  background:var(--red); color:white; border:0; border-radius:10px;
+  padding:0 20px; font-weight:750; cursor:pointer;
 }
-
-.dot.on {
-  background: var(--green);
-  box-shadow: 0 0 12px #52d69a70;
+button:disabled { opacity:.5; cursor:wait; }
+.files { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:14px; }
+.file { min-width:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.file-head { padding:12px; border-bottom:1px solid var(--line); }
+.file-path { font-size:12px; color:var(--muted); overflow-wrap:anywhere; margin-top:5px; }
+pre {
+  margin:0; padding:14px; max-height:500px; overflow:auto;
+  background:#101014; color:#d8e0ee; font:12px/1.6 Consolas,monospace;
+  white-space:pre; tab-size:4;
 }
-
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 16px;
-  flex: 1;
-  padding-top: 16px;
-  min-height: 0;
-}
-
-.chat, .sidecard {
-  background: #101015ef;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  overflow: hidden;
-}
-
-.chat {
-  display: flex;
-  flex-direction: column;
-  min-height: 650px;
-}
-
-.chathead {
-  padding: 15px 18px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.chathead strong { font-size: 14px; }
-
-.chathead span {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.messages {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
-  overflow: auto;
-  max-height: calc(100vh - 260px);
-  min-height: 300px;
-}
-
-.welcome {
-  margin: auto;
-  max-width: 510px;
-  text-align: center;
-  padding: 24px 12px;
-}
-
-.spark { font-size: 32px; }
-
-.welcome h1 {
-  font-size: 27px;
-  line-height: 1.15;
-  margin: 12px 0 8px;
-}
-
-.welcome p {
-  color: var(--muted);
-  margin: 0 auto 20px;
-  max-width: 420px;
-}
-
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.suggestion {
-  background: var(--panel2);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 9px 12px;
-  color: #dddde6;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.suggestion:hover { border-color: #a5263e; }
-
-.msg {
-  max-width: 92%;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 14px;
-  padding: 12px 14px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.msg.user {
-  align-self: flex-end;
-  background: #30131b;
-  border-color: #602133;
-}
-
-.msg.assistant { align-self: flex-start; }
-
-.msg small {
-  display: block;
-  color: var(--muted);
-  font-size: 10px;
-  margin-bottom: 5px;
-}
-
-.msg pre {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  background: #09090d;
-  padding: 10px;
-  border-radius: 8px;
-  overflow: auto;
-}
-
-.composer {
-  padding: 14px;
-  border-top: 1px solid var(--line);
-}
-
-.inputwrap {
-  display: flex;
-  gap: 10px;
-  background: #17171e;
-  border: 1px solid #34343f;
-  border-radius: 14px;
-  padding: 8px;
-}
-
-.inputwrap:focus-within { border-color: #9e263e; }
-
-.inputwrap textarea {
-  flex: 1;
-  resize: vertical;
-  min-height: 48px;
-  max-height: 180px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  padding: 8px;
-}
-
-.send {
-  border: 0;
-  background: var(--red);
-  color: white;
-  font-weight: 800;
-  border-radius: 10px;
-  padding: 0 18px;
-  cursor: pointer;
-}
-
-.send:disabled {
-  opacity: .5;
-  cursor: wait;
-}
-
-.hint {
-  font-size: 11px;
-  color: var(--muted);
-  margin: 8px 4px 0;
-}
-
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sidecard { padding: 16px; }
-
-.sidecard h3 {
-  margin: 0 0 10px;
-  font-size: 13px;
-}
-
-.sidecard p {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 0;
-}
-
-.state {
-  display: flex;
-  gap: 9px;
-  align-items: flex-start;
-  margin: 10px 0;
-}
-
-.stateicon {
-  width: 28px;
-  height: 28px;
-  flex: none;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 9px;
-  background: var(--panel2);
-}
-
-.state b {
-  display: block;
-  font-size: 12px;
-}
-
-.state small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.activity {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-
-.event {
-  font-size: 11px;
-  color: var(--muted);
-  border-left: 2px solid #633043;
-  padding-left: 9px;
-  overflow-wrap: anywhere;
-}
-
-.event.good { border-color: var(--green); }
-.event.bad { border-color: var(--red); }
-
-.footer {
-  color: #777783;
-  font-size: 10px;
-  text-align: center;
-  padding: 14px 0 0;
-}
-
-@media(max-width:850px) {
-  .layout { grid-template-columns: 1fr; }
-  .sidebar { display: grid; grid-template-columns: 1fr 1fr; }
-  .chat { min-height: 560px; }
-  .messages { max-height: none; }
-}
-
-@media(max-width:560px) {
-  .app { padding: 10px; }
-  .sidebar { display: flex; }
-  .status { padding: 7px 9px; }
-  .sub { display: none; }
-  .messages { padding: 12px; }
-  .welcome h1 { font-size: 23px; }
+.tag { color:#b6b6c4; font-size:11px; text-transform:uppercase; }
+#activity { padding:14px 16px; color:var(--muted); white-space:pre-wrap; }
+@media(max-width:700px) {
+  main { padding:10px; }
+  header { padding:14px; }
+  .files { grid-template-columns:1fr; }
+  .composer { flex-direction:column; }
+  button { min-height:44px; }
 }
 </style>
 </head>
-
 <body>
-<div class="app">
+<header>
+  <div class="brand">CONNECT <span>AI</span></div>
+  <div id="status" class="status">Checking Studio connection…</div>
+</header>
 
-  <header class="top">
-    <div class="logo">C</div>
-    <div>
-      <div class="brand">Connect AI</div>
-      <div class="sub">Your AI workspace for Roblox Studio</div>
+<main>
+  <section class="panel">
+    <div class="panel-title">
+      <span>Roblox Studio Assistant</span>
+      <span class="tag">Live context</span>
     </div>
-    <div class="status">
-      <i id="statusDot" class="dot"></i>
-      <span id="statusText">Checking Studio bridge…</span>
-    </div>
-  </header>
+    <div id="messages">
+      <div class="message ai">Connect AI is ready. Open the Studio plugin to send live script context.
 
-  <div class="layout">
-    <main class="chat">
-      <div class="chathead">
-        <div>
-          <strong>AI Assistant</strong><br>
-          <span>Ask for help or request Studio edits</span>
+Try: “Read BaseManager in ServerScriptService and fix the cash-saving bug.”</div>
+    </div>
+    <div class="composer">
+      <textarea id="prompt" placeholder="Ask Connect AI to read, debug, or edit your Roblox scripts…"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-title">
+      <span>Script editor history</span>
+      <span class="tag">Original / Updated</span>
+    </div>
+    <div id="activity">Your actual script changes will appear here after the Studio plugin reports them.</div>
+    <div class="files">
+      <div class="file">
+        <div class="file-head">
+          <strong>Read file</strong>
+          <div class="file-path" id="beforePath">No file loaded</div>
         </div>
-        <span id="modelLabel">Gemini-powered</span>
+        <pre id="beforeSource">Select a script and ask Connect AI to edit it.</pre>
       </div>
-
-      <section id="messages" class="messages">
-        <div id="welcome" class="welcome">
-          <div class="spark">✦</div>
-          <h1>What are we building?</h1>
-          <p>
-            Describe a Roblox Studio task. Connect AI can inspect
-            the plugin's reported context and send supported changes to Studio.
-          </p>
-
-          <div class="suggestions">
-            <button class="suggestion"
-              data-prompt="Create an anchored red platform in front of the spawn.">
-              Create a platform
-            </button>
-
-            <button class="suggestion"
-              data-prompt="Inspect my current selection and explain its important properties.">
-              Inspect selection
-            </button>
-
-            <button class="suggestion"
-              data-prompt="Create a folder named GameAssets in Workspace.">
-              Create a folder
-            </button>
-
-            <button class="suggestion"
-              data-prompt="Set the selected Part to Anchored true and CanCollide true.">
-              Edit selected part
-            </button>
-          </div>
+      <div class="file">
+        <div class="file-head">
+          <strong>Edited file</strong>
+          <div class="file-path" id="afterPath">No changes yet</div>
         </div>
-      </section>
-
-      <form id="chatForm" class="composer">
-        <div class="inputwrap">
-          <textarea id="prompt"
-            placeholder="Message Connect AI…"
-            rows="2" required></textarea>
-          <button class="send" id="sendBtn" type="submit">
-            Send ↗
-          </button>
-        </div>
-        <div class="hint">
-          Studio edits require the Connect AI plugin to be open in Roblox Studio.
-          Review changes in Studio and use Undo if needed.
-        </div>
-      </form>
-    </main>
-
-    <aside class="sidebar">
-      <section class="sidecard">
-        <h3>Studio bridge</h3>
-        <div class="state">
-          <div class="stateicon">⌘</div>
-          <div>
-            <b id="bridgeTitle">Waiting for plugin</b>
-            <small id="bridgeDesc">
-              Open Connect AI in Roblox Studio to connect.
-            </small>
-          </div>
-        </div>
-        <p>
-          The web page does not fake Studio activity.
-          Connection status comes from the plugin heartbeat.
-        </p>
-      </section>
-
-      <section class="sidecard">
-        <h3>Activity</h3>
-        <div id="activity" class="activity">
-          <div class="event">Ready. Send a request to begin.</div>
-        </div>
-      </section>
-
-      <section class="sidecard">
-        <h3>What it can do</h3>
-
-        <div class="state">
-          <div class="stateicon">⌕</div>
-          <div>
-            <b>Inspect selection</b>
-            <small>Names, classes, paths and common properties.</small>
-          </div>
-        </div>
-
-        <div class="state">
-          <div class="stateicon">＋</div>
-          <div>
-            <b>Create instances</b>
-            <small>Parts and supported Roblox instances.</small>
-          </div>
-        </div>
-
-        <div class="state">
-          <div class="stateicon">⚙</div>
-          <div>
-            <b>Change properties</b>
-            <small>Validated property edits with Studio undo history.</small>
-          </div>
-        </div>
-
-        <div class="state">
-          <div class="stateicon">✓</div>
-          <div>
-            <b>Report real results</b>
-            <small>Success or error comes back from the plugin.</small>
-          </div>
-        </div>
-      </section>
-    </aside>
-  </div>
-
-  <div class="footer">
-    Connect AI • API keys stay on the backend • Never execute arbitrary model-generated Lua
-  </div>
-</div>
+        <pre id="afterSource">The full replacement source will appear here after a successful edit.</pre>
+      </div>
+    </div>
+  </section>
+</main>
 
 <script>
-const $ = selector => document.querySelector(selector);
-
-const messages = $('#messages');
-const welcome = $('#welcome');
-const promptBox = $('#prompt');
-const sendBtn = $('#sendBtn');
-
-let history = [];
+const $ = id => document.getElementById(id);
+const messages = $("messages");
 let busy = false;
 
-function activity(text, kind = '') {
-  const event = document.createElement('div');
-  event.className = 'event ' + kind;
-
-  event.textContent =
-    new Date().toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit'
-    }) + ' · ' + text;
-
-  $('#activity').prepend(event);
-
-  while ($('#activity').children.length > 8) {
-    $('#activity').lastChild.remove();
-  }
-}
-
-function addMessage(role, text) {
-  $('#welcome')?.remove();
-
-  const element = document.createElement('div');
-  element.className = 'msg ' + role;
-
-  const label = document.createElement('small');
-  label.textContent = role === 'user' ? 'YOU' : 'CONNECT AI';
-
-  element.append(label, document.createTextNode(text || ''));
-
-  messages.append(element);
+function addMessage(text, role) {
+  const item = document.createElement("div");
+  item.className = "message " + role;
+  item.textContent = text;
+  messages.appendChild(item);
   messages.scrollTop = messages.scrollHeight;
-
-  return element;
+  return item;
 }
 
-async function checkHealth() {
+async function getJSON(url, options = {}) {
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
+async function refreshStatus() {
   try {
-    const response = await fetch('/health');
-    const data = await response.json();
-
-    const connected = !!data.studioConnected;
-
-    $('#statusDot').classList.toggle('on', connected);
-
-    $('#statusText').textContent = connected
-      ? 'Roblox Studio connected'
-      : 'Studio plugin offline';
-
-    $('#bridgeTitle').textContent = connected
-      ? 'Plugin connected'
-      : 'Waiting for plugin';
-
-    $('#bridgeDesc').textContent = connected
-      ? 'Heartbeat received from Studio.'
-      : 'Open the plugin and enable HTTP requests if prompted.';
+    const data = await getJSON("/health");
+    $("status").textContent = data.studioOnline
+      ? `Studio connected · ${data.queuedJobs} queued`
+      : "Studio offline · Open the Connect AI plugin";
   } catch {
-    $('#statusText').textContent = 'Backend unavailable';
-    $('#bridgeTitle').textContent = 'Backend unavailable';
-    $('#bridgeDesc').textContent = 'Check the Render deployment.';
+    $("status").textContent = "Backend unavailable";
   }
 }
 
-async function waitForJob(jobId, bubble) {
-  if (!jobId) return;
+function showScriptResult(result) {
+  if (!result || !result.before || !result.after) return;
 
-  activity('Waiting for Roblox Studio to apply requested changes…');
+  $("beforePath").textContent = result.path || "Original script";
+  $("afterPath").textContent = result.path || "Updated script";
+  $("beforeSource").textContent = result.before;
+  $("afterSource").textContent = result.after;
 
-  const started = Date.now();
-  let lastStatus = '';
-
-  while (Date.now() - started < 90000) {
-    await new Promise(resolve => setTimeout(resolve, 1800));
-
-    try {
-      const response = await fetch(
-        '/api/jobs/' + encodeURIComponent(jobId)
-      );
-
-      const job = await response.json();
-
-      if (!response.ok) {
-        throw new Error(job.error || 'Could not read task status.');
-      }
-
-      if (job.status !== lastStatus) {
-        lastStatus = job.status;
-
-        if (job.status === 'queued') {
-          activity('Edit task is waiting for the Studio plugin.');
-        } else if (job.status === 'sent-to-studio') {
-          activity('Plugin received the edit request.');
-        }
-      }
-
-      if (job.status === 'complete') {
-        const result = job.result || {};
-
-        const line = result.ok
-          ? 'Studio applied ' + (result.applied || 0) + ' change(s).'
-          : 'Studio reported an error: ' +
-            (result.message || 'Unknown error');
-
-        bubble.textContent += '\n\n' + line;
-
-        activity(line, result.ok ? 'good' : 'bad');
-        return;
-      }
-    } catch (error) {
-      activity('Could not check task status: ' + error.message, 'bad');
-    }
-  }
-
-  bubble.textContent +=
-    '\n\nNo result received yet. Check that the Studio plugin is running.';
-
-  activity('Timed out waiting for plugin result.', 'bad');
+  $("activity").textContent =
+    "Studio reported a script edit.\n" +
+    "Path: " + (result.path || "Unknown") + "\n" +
+    "Status: " + (result.error ? "Failed" : "Applied") + "\n" +
+    (result.message || result.error || "");
 }
 
-$('#chatForm').addEventListener('submit', async event => {
-  event.preventDefault();
-
+async function sendMessage() {
   if (busy) return;
 
-  const message = promptBox.value.trim();
+  const message = $("prompt").value.trim();
   if (!message) return;
 
   busy = true;
-  sendBtn.disabled = true;
-  promptBox.value = '';
+  $("send").disabled = true;
+  $("send").textContent = "Working…";
+  addMessage(message, "user");
+  $("prompt").value = "";
 
-  addMessage('user', message);
-  activity('Sending request to AI…');
-
-  const thinking = addMessage('assistant', 'Thinking…');
+  const answer = addMessage("Reading context and preparing a response…", "ai");
 
   try {
-    const response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        message,
-        history
-      })
+    const data = await getJSON("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
     });
 
-    const data = await response.json();
+    answer.textContent = data.reply || "Request received.";
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Request failed');
-    }
+    if (data.jobId) {
+      $("activity").textContent = "Waiting for the Studio plugin to apply the requested changes…";
 
-    thinking.textContent = data.reply || 'No reply returned.';
+      const start = Date.now();
+      let finished = false;
 
-    if (data.actions && data.actions.length) {
-      thinking.textContent +=
-        '\n\nRequested Studio changes: ' + data.actions.length;
+      while (Date.now() - start < 120000) {
+        await new Promise(resolve => setTimeout(resolve, 700));
 
-      activity(
-        'AI proposed ' + data.actions.length + ' Studio change(s).'
-      );
+        const job = await getJSON("/api/jobs/" + encodeURIComponent(data.jobId));
 
-      if (!data.studioConnected) {
-        activity(
-          'Studio heartbeat not detected; open the plugin.',
-          'bad'
-        );
+        if (job.status === "completed" || job.status === "failed") {
+          finished = true;
+
+          for (const result of job.results || []) {
+            showScriptResult(result);
+          }
+
+          if (job.status === "completed") {
+            answer.textContent += "\n\nStudio has reported the job as completed.";
+            $("activity").textContent =
+              "Job completed. Check each result and review the changed script in Studio.";
+          } else {
+            answer.textContent += "\n\nStudio reported a failure: " + (job.error || "Unknown error");
+            $("activity").textContent = "Job failed: " + (job.error || "Unknown error");
+          }
+          break;
+        }
       }
 
-      waitForJob(data.jobId, thinking);
-    } else {
-      activity('Response received.', 'good');
+      if (!finished) {
+        $("activity").textContent =
+          "Still waiting for Studio. Check that the plugin is open and connected.";
+      }
+    } else if (data.actions && data.actions.length === 0) {
+      $("activity").textContent = "No Studio edit was requested for this reply.";
     }
-
-    history.push(
-      { role: 'user', text: message },
-      { role: 'model', text: data.reply || '' }
-    );
-
-    history = history.slice(-20);
   } catch (error) {
-    thinking.textContent = 'Error: ' + error.message;
-    activity('Request failed: ' + error.message, 'bad');
+    answer.textContent = "Error: " + error.message;
+    $("activity").textContent = "Request failed. Check the backend and plugin connection.";
   } finally {
     busy = false;
-    sendBtn.disabled = false;
-    checkHealth();
+    $("send").disabled = false;
+    $("send").textContent = "Send";
+    refreshStatus();
   }
-});
+}
 
-document.querySelectorAll('[data-prompt]').forEach(button => {
-  button.addEventListener('click', () => {
-    promptBox.value = button.dataset.prompt;
-    promptBox.focus();
-  });
-});
-
-promptBox.addEventListener('keydown', event => {
-  if (event.key === 'Enter' && !event.shiftKey) {
+$("send").addEventListener("click", sendMessage);
+$("prompt").addEventListener("keydown", event => {
+  if (event.key === "Enter" && !event.shiftKey) {
     event.preventDefault();
-    $('#chatForm').requestSubmit();
+    sendMessage();
   }
 });
 
-checkHealth();
-setInterval(checkHealth, 5000);
+refreshStatus();
+setInterval(refreshStatus, 3000);
 </script>
 </body>
 </html>
