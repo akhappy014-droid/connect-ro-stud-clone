@@ -1,16 +1,14 @@
 {
   "name": "connect-ai",
   "version": "1.0.0",
+  "description": "Connect AI for Roblox Studio",
   "private": true,
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=20"
+    "start": "npm start"
   },
   "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^5.1.0"
+    "cors": "2.8.5",
+    "express": "4.21.2"
   }
 }
