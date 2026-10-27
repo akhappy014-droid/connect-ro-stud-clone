@@ -1,339 +1,315 @@
-
-'use strict';
-
-const express = require('express');
-const path = require('path');
-const crypto = require('crypto');
+// server.js
+const express = require("express");
+const cors = require("cors");
+const crypto = require("crypto");
+const path = require("path");
 
 const app = express();
-app.disable('x-powered-by');
-app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(cors());
+app.use(express.json({ limit: "3mb" }));
+
+app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-const CONNECT_AI_TOKEN = process.env.CONNECT_AI_TOKEN;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.8-flash";
+const CONNECT_AI_TOKEN = process.env.CONNECT_AI_TOKEN || "";
 
-const sessions = new Map();
+let studio = {
+  online: false,
+  lastSeen: 0,
+  context: {},
+  scripts: [],
+  selection: [],
+};
+
 const jobs = new Map();
-const MAX_JOBS = 200;
+const queue = [];
+const MAX_QUEUE = 30;
 
-function pluginAuth(req, res, next) {
-  if (!CONNECT_AI_TOKEN) {
-    return res.status(503).json({
-      error: 'Server missing CONNECT_AI_TOKEN environment variable.'
-    });
+function authorized(req) {
+  if (!CONNECT_AI_TOKEN) return true;
+
+  const supplied =
+    req.headers["x-connect-token"] ||
+    req.body?.token ||
+    "";
+
+  return supplied === CONNECT_AI_TOKEN;
+}
+
+function requireStudioAuth(req, res, next) {
+  if (!authorized(req)) {
+    return res.status(401).json({ error: "Invalid plugin token." });
   }
-
-  const supplied = (req.headers.authorization || '')
-    .replace(/^Bearer\s+/i, '');
-
-  const a = Buffer.from(supplied);
-  const b = Buffer.from(CONNECT_AI_TOKEN);
-
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return res.status(401).json({
-      error: 'Unauthorized plugin. Check CONNECT_AI_TOKEN.'
-    });
-  }
-
   next();
 }
 
-function clampText(value, max = 20000) {
-  return typeof value === 'string' ? value.slice(0, max) : '';
+function cleanScript(script) {
+  return {
+    path: String(script.path || "").slice(0, 300),
+    className: String(script.className || "").slice(0, 40),
+    source: String(script.source || "").slice(0, 10000),
+  };
 }
 
-function cleanActions(actions) {
-  if (!Array.isArray(actions)) return [];
-
-  const allowed = new Set([
-    'create_part',
-    'set_property',
-    'create_instance',
-    'delete_instance'
-  ]);
-
-  return actions.slice(0, 30)
-    .filter(action => action && allowed.has(action.type))
-    .map(action => ({
-      type: action.type,
-      name: clampText(action.name, 100),
-      className: clampText(action.className, 80),
-      path: clampText(action.path, 500),
-      parentPath: clampText(action.parentPath, 500),
-      property: clampText(action.property, 80),
-      value: action.value,
-      size: action.size,
-      position: action.position,
-      color: action.color,
-      anchored: action.anchored
-    }));
-}
-
-app.get('/health', (_req, res) => {
-  const studioConnected = [...sessions.values()].some(
-    session => Date.now() - session.lastSeen < 15000
-  );
+app.get("/health", (_req, res) => {
+  const online = Date.now() - studio.lastSeen < 15000;
 
   res.json({
     ok: true,
-    service: 'Connect AI',
-    studioConnected
+    studioOnline: online,
+    model: GEMINI_MODEL,
+    queuedJobs: queue.length,
   });
 });
 
-// Receives a heartbeat and current context from the Studio plugin.
-app.post('/api/studio/heartbeat', pluginAuth, (req, res) => {
-  const id = clampText(req.body && req.body.pluginId, 100)
-    || 'default-plugin';
+// The plugin sends its current Explorer/script context.
+app.post("/api/studio/heartbeat", requireStudioAuth, (req, res) => {
+  studio.online = true;
+  studio.lastSeen = Date.now();
+  studio.context = req.body.context || {};
+  studio.selection = Array.isArray(req.body.selection)
+    ? req.body.selection.slice(0, 30)
+    : [];
 
-  sessions.set(id, {
-    lastSeen: Date.now(),
-    context: req.body.context || {},
-    result: null
-  });
+  studio.scripts = Array.isArray(req.body.scripts)
+    ? req.body.scripts.slice(0, 35).map(cleanScript)
+    : [];
 
   res.json({
     ok: true,
-    serverTime: Date.now()
+    receivedScripts: studio.scripts.length,
+    receivedSelection: studio.selection.length,
   });
 });
 
-// The plugin polls this endpoint for pending edit jobs.
-app.get('/api/studio/next', pluginAuth, (req, res) => {
-  const id = clampText(req.query.pluginId, 100)
-    || 'default-plugin';
-
-  const job = [...jobs.values()].find(
-    item => item.status === 'queued'
-  );
-
-  if (!job) {
-    return res.json({ job: null });
-  }
-
-  job.status = 'sent-to-studio';
-  job.pluginId = id;
-
-  res.json({
-    job: {
-      id: job.id,
-      actions: job.actions,
-      request: job.request
-    }
-  });
+// The plugin checks for work.
+app.get("/api/studio/next", requireStudioAuth, (_req, res) => {
+  const job = queue.shift();
+  res.json({ job: job || null });
 });
 
-// Receives the actual result from the plugin.
-app.post('/api/studio/result', pluginAuth, (req, res) => {
-  const id = clampText(req.body && req.body.id, 100);
+// The plugin reports the real result after executing an edit.
+app.post("/api/studio/result", requireStudioAuth, (req, res) => {
+  const { id, success, results, error } = req.body || {};
   const job = jobs.get(id);
 
   if (!job) {
-    return res.status(404).json({ error: 'Unknown job.' });
+    return res.status(404).json({ error: "Job not found." });
   }
 
-  job.status = 'complete';
-  job.result = req.body.result || {
-    ok: false,
-    message: 'No result returned.'
-  };
+  job.status = success ? "completed" : "failed";
+  job.results = Array.isArray(results) ? results : [];
+  job.error = error || null;
   job.finishedAt = Date.now();
 
   res.json({ ok: true });
 });
 
-// The website polls this endpoint for job status.
-app.get('/api/jobs/:id', (req, res) => {
+app.get("/api/jobs/:id", (req, res) => {
   const job = jobs.get(req.params.id);
 
   if (!job) {
-    return res.status(404).json({ error: 'Job not found.' });
+    return res.status(404).json({ error: "Job not found." });
   }
 
   res.json({
     id: job.id,
     status: job.status,
-    result: job.result || null
+    reply: job.reply,
+    actions: job.actions,
+    results: job.results || [],
+    error: job.error || null,
   });
 });
 
-app.post('/api/chat', async (req, res) => {
-  try {
-    if (!GEMINI_API_KEY) {
-      return res.status(503).json({
-        error: 'Backend is missing GEMINI_API_KEY. Add it in Render Environment.'
-      });
+const SYSTEM_PROMPT = `
+You are Connect AI, an expert Roblox Studio Luau coding assistant.
+
+Use the provided live Studio context. Prefer editing an existing script when
+the user asks to fix or update one. Do not create duplicate scripts unnecessarily.
+
+Return ONLY valid JSON:
+{
+  "reply": "Short explanation of what you intend to do",
+  "actions": [
+    {
+      "type": "edit_script",
+      "path": "ServerScriptService.BaseManager",
+      "source": "COMPLETE replacement Luau source"
     }
-
-    const message = clampText(
-      req.body && req.body.message,
-      12000
-    ).trim();
-
-    if (!message) {
-      return res.status(400).json({
-        error: 'Please enter a message.'
-      });
-    }
-
-    const recentSession = [...sessions.values()]
-      .filter(session => Date.now() - session.lastSeen < 30000)
-      .sort((a, b) => b.lastSeen - a.lastSeen)[0];
-
-    const studioContext = recentSession
-      ? recentSession.context
-      : {
-          connected: false,
-          note: 'No active Roblox Studio plugin heartbeat received.'
-        };
-
-    const history = Array.isArray(req.body.history)
-      ? req.body.history.slice(-12).map(item => ({
-          role: item.role === 'model' ? 'model' : 'user',
-          parts: [{
-            text: clampText(item.text, 4000)
-          }]
-        }))
-      : [];
-
-    const system = `You are Connect AI, a practical Roblox Studio assistant.
-
-Return ONLY valid JSON in this shape:
-{"reply":"short natural language response","actions":[]}
+  ]
+}
 
 Supported actions:
+1. edit_script: { "type":"edit_script", "path":"exact Explorer path",
+                  "source":"complete replacement source" }
+2. create_part: { "type":"create_part", "name":"PartName",
+                  "parent":"Workspace", "properties": {
+                    "Anchored":true, "Size":[4,1,4],
+                    "Position":[0,5,0], "Color":[1,0,0]
+                  }}
+3. set_property: { "type":"set_property", "path":"Workspace.Part",
+                   "property":"Anchored", "value":true }
+4. create_instance: { "type":"create_instance",
+                      "className":"Folder", "name":"FolderName",
+                      "parent":"ServerScriptService" }
+5. delete_instance: { "type":"delete_instance",
+                      "path":"Workspace.Part" }
 
-1. Create a part:
-{"type":"create_part","name":"PartName","parentPath":"Workspace","size":[4,1,4],"position":[0,5,0],"color":[0.8,0.1,0.1],"anchored":true}
+For edit_script:
+- The path MUST match a script supplied in the live context.
+- Return the FULL new source, not a partial patch or instructions.
+- Preserve unrelated working code and existing conventions.
+- Use valid Luau and Roblox APIs.
+- Do not invent APIs, remote names, or objects absent from context.
+- If required information is missing, ask a short question and return no actions.
+- Never claim an edit was applied; the plugin will report the result.
+- Make only changes requested by the user.
+- Keep the reply concise and prioritize useful edits.
+`;
 
-2. Set a property:
-{"type":"set_property","path":"Workspace.PartName","property":"Anchored","value":true}
+app.post("/api/chat", async (req, res) => {
+  try {
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({
+        error: "GEMINI_API_KEY is missing in Render environment variables.",
+      });
+    }
 
-3. Create an instance:
-{"type":"create_instance","className":"Folder","name":"FolderName","parentPath":"Workspace"}
+    const message = String(req.body.message || "").trim();
+    if (!message) {
+      return res.status(400).json({ error: "Message is required." });
+    }
 
-4. Delete an instance:
-{"type":"delete_instance","path":"Workspace.PartName"}
+    const liveOnline = Date.now() - studio.lastSeen < 15000;
 
-Use paths shown in the supplied Studio context.
-Only use common supported properties such as Name, Anchored,
-CanCollide, Transparency, Material, Color, Size, Position,
-WalkSpeed, JumpPower, MaxHealth, Health, Text, TextColor3,
-BackgroundColor3, Visible, Enabled and Value.
+    // Keep context bounded to reduce latency and token usage.
+    const context = {
+      studioOnline: liveOnline,
+      explorer: studio.context,
+      selection: studio.selection,
+      scripts: studio.scripts.map((s) => ({
+        path: s.path,
+        className: s.className,
+        source: s.source,
+      })),
+    };
 
-Vector values must be arrays.
-Never emit Lua code for execution.
-Never claim an edit already happened. Say it was requested and
-report success only after the plugin sends a result.
-If Studio is disconnected or context is absent, explain that
-the plugin must be open and connected.
-Ask for clarification before destructive or ambiguous changes.
-Do not delete or overwrite scripts unless explicitly requested.
-
-Studio context:
-${JSON.stringify(studioContext).slice(0, 24000)}`;
-
-    const contents = [
-      ...history,
-      {
-        role: 'user',
-        parts: [{
-          text: system + '\n\nUser request: ' + message
-        }]
-      }
-    ];
+    const prompt = [
+      SYSTEM_PROMPT,
+      "\nLIVE ROBLOX STUDIO CONTEXT:\n",
+      JSON.stringify(context),
+      "\nUSER REQUEST:\n",
+      message,
+    ].join("\n");
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`,
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contents,
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.25,
-            responseMimeType: 'application/json'
-          }
-        })
+            temperature: 0.2,
+            responseMimeType: "application/json",
+          },
+        }),
+        signal: AbortSignal.timeout(45000),
       }
     );
 
-    const payload = await response.json();
+    const raw = await response.json();
 
     if (!response.ok) {
-      return res.status(502).json({
-        error: payload.error && payload.error.message
-          || `Gemini request failed (${response.status}).`
+      return res.status(response.status).json({
+        error: raw.error?.message || "Gemini request failed.",
       });
     }
 
-    const raw = payload.candidates
-      && payload.candidates[0]
-      && payload.candidates[0].content
-      && payload.candidates[0].content.parts
-      && payload.candidates[0].content.parts
-        .map(part => part.text || '')
-        .join('');
+    const textOutput =
+      raw.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text || "")
+        .join("") || "";
 
     let parsed;
-
     try {
-      parsed = JSON.parse(raw || '{}');
+      parsed = JSON.parse(textOutput);
     } catch {
-      parsed = {
-        reply: raw || 'I could not parse the model response.',
-        actions: []
-      };
+      return res.status(502).json({
+        error: "AI returned invalid JSON. Try a more specific request.",
+        raw: textOutput.slice(0, 1500),
+      });
     }
 
-    const actions = cleanActions(parsed.actions);
-    let jobId = null;
+    const actions = Array.isArray(parsed.actions)
+      ? parsed.actions.slice(0, 15)
+      : [];
 
-    if (actions.length) {
-      jobId = crypto.randomUUID();
-
-      jobs.set(jobId, {
-        id: jobId,
-        status: 'queued',
-        actions,
-        request: message,
-        createdAt: Date.now(),
-        result: null
+    if (!liveOnline && actions.length) {
+      return res.status(409).json({
+        error: "Roblox Studio plugin is offline. Open the Connect AI plugin first.",
       });
+    }
 
-      while (jobs.size > MAX_JOBS) {
-        jobs.delete(jobs.keys().next().value);
+    if (!actions.length) {
+      return res.json({
+        reply: parsed.reply || "No Studio changes were needed.",
+        actions: [],
+        jobId: null,
+      });
+    }
+
+    const id = crypto.randomUUID();
+
+    const job = {
+      id,
+      status: "queued",
+      reply: String(parsed.reply || "Applying your requested changes."),
+      actions,
+      results: [],
+      createdAt: Date.now(),
+    };
+
+    jobs.set(id, job);
+    queue.push(job);
+
+    // Keep the in-memory job store bounded.
+    if (jobs.size > 200) {
+      for (const [key, value] of jobs) {
+        if (value.status === "completed" || value.status === "failed") {
+          jobs.delete(key);
+          if (jobs.size <= 150) break;
+        }
       }
     }
 
     res.json({
-      reply: clampText(parsed.reply, 12000) || 'Done thinking.',
-      actions,
-      jobId,
-      studioConnected: !!recentSession
+      reply: job.reply,
+      actions: actions.map((a) => ({
+        type: a.type,
+        path: a.path || null,
+        name: a.name || null,
+      })),
+      jobId: id,
     });
   } catch (error) {
-    console.error('chat error', error);
-
+    console.error("Chat error:", error);
     res.status(500).json({
-      error: 'Unexpected backend error. Check Render logs.'
+      error: error.name === "TimeoutError"
+        ? "AI request timed out. Please try again."
+        : "Server error. Check the Render logs.",
     });
   }
 });
 
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api/')) return next();
-
-  res.sendFile(
-    path.join(__dirname, 'public', 'index.html')
-  );
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) return next();
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.listen(PORT, () => {
-  console.log(`Connect AI listening on ${PORT}`);
+  console.log(`Connect AI running on port ${PORT}`);
 });
